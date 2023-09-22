@@ -25,10 +25,10 @@ various satellite sensors
 """
 
 import logging
+from tqdm import tqdm
 from numbers import Number
 
 import numpy as np
-from scipy import integrate
 
 from pyspectral.blackbody import C_SPEED, H_PLANCK, K_BOLTZMANN, blackbody, blackbody_wn
 from pyspectral.rsr_reader import RelativeSpectralResponse
@@ -218,11 +218,16 @@ class RadTbConverter(object):
             retv['scale'] = scale
             return retv
 
-        planck = self.blackbody_function(self.wavelength_or_wavenumber, tb_) * self.response
+        radiance = 0
+
+        prev = self.blackbody_function(self.wavelength_or_wavenumber[0], tb_) * self.response[0]
+        for i in tqdm(range(1, len(self.wavelength_or_wavenumber))):
+            next = self.blackbody_function(self.wavelength_or_wavenumber[i], tb_) * self.response[i]
+            dx = self.wavelength_or_wavenumber[i] - self.wavelength_or_wavenumber[i - 1]
+            radiance = radiance + (prev * dx) + ((next - prev) * dx)
+
         if normalized:
-            radiance = integrate.trapz(planck, self.wavelength_or_wavenumber) / self.rsr_integral
-        else:
-            radiance = integrate.trapz(planck, self.wavelength_or_wavenumber)
+            radiance = radiance / self.rsr_integral
 
         return {'radiance': radiance,
                 'unit': unit,

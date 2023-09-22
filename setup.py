@@ -22,6 +22,9 @@
 import os.path
 
 from setuptools import find_packages, setup
+from Cython.Distutils import Extension
+from Cython.Build import cythonize
+import numpy
 
 description = ('Reading and manipulaing satellite sensor spectral responses and the '
                'solar spectrum, to perfom various corrections to VIS and NIR band data')
@@ -39,6 +42,13 @@ dask_extra = ['dask[array]']
 test_requires = ['pyyaml', 'dask[array]', 'xlrd', 'pytest', 'xarray', 'responses']
 
 NAME = 'pyspectral'
+
+extensions = [
+    Extension("pyspectral.planck",
+              sources=["pyspectral/planck.pyx"],
+              include_dirs=[numpy.get_include()],
+              define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]),
+    ]
 
 setup(name=NAME,
       description=description,
@@ -84,4 +94,5 @@ setup(name=NAME,
       tests_require=test_requires,
       python_requires='>=3.7',
       zip_safe=False,
+      ext_modules=cythonize(extensions, compiler_directives={'language_level': 3})
       )
