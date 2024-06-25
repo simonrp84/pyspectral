@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2014-2023 Pytroll developers
+# Copyright (c) 2014-2024 Pytroll developers
 #
 #
 # This program is free software: you can redistribute it and/or modify
@@ -23,6 +23,8 @@ import logging
 import os
 import tarfile
 import warnings
+from functools import wraps
+from inspect import getfullargspec
 
 import numpy as np
 import requests
@@ -52,6 +54,7 @@ INSTRUMENTS = {'Envisat': 'aatsr',
                'Himawari-8': 'ahi',
                'Himawari-9': 'ahi',
                'GEO-KOMPSAT-2A': 'ami',
+               'GEO-KOMPSAT-2B': 'goci-2',
                'NOAA-10': 'avhrr/1',
                'NOAA-6': 'avhrr/1',
                'NOAA-8': 'avhrr/1',
@@ -73,6 +76,7 @@ INSTRUMENTS = {'Envisat': 'aatsr',
                'Meteosat-12': 'fci',
                'MTG-I1': 'fci',
                'FY-3D': 'mersi-2',
+               'FY-3G': 'mersi-rm',
                'Metop-SG-A1': 'metimage',
                'EOS-Aqua': 'modis',
                'EOS-Terra': 'modis',
@@ -90,8 +94,9 @@ INSTRUMENTS = {'Envisat': 'aatsr',
                'NOAA-20': 'viirs',
                'NOAA-21': 'viirs',
                'Suomi-NPP': 'viirs',
-               'FY-3B': 'virr',
-               'FY-3C': 'virr',
+               'FY-3A': ['virr', 'mersi-1'],
+               'FY-3B': ['virr', 'mersi-1'],
+               'FY-3C': ['virr', 'mersi-1'],
                'DSCOVR': 'epic'}
 
 
@@ -99,10 +104,10 @@ INSTRUMENT_TRANSLATION_DASH2SLASH = {'avhrr-1': 'avhrr/1',
                                      'avhrr-2': 'avhrr/2',
                                      'avhrr-3': 'avhrr/3'}
 
-HTTP_PYSPECTRAL_RSR = "https://zenodo.org/records/10029746/files/pyspectral_rsr_data.tgz"
+HTTP_PYSPECTRAL_RSR = "https://zenodo.org/records/11110033/files/pyspectral_rsr_data.tgz"
 
 RSR_DATA_VERSION_FILENAME = "PYSPECTRAL_RSR_VERSION"
-RSR_DATA_VERSION = "v1.2.4"
+RSR_DATA_VERSION = "v1.3.0"
 
 ATM_CORRECTION_LUT_VERSION = {}
 ATM_CORRECTION_LUT_VERSION['antarctic_aerosol'] = {'version': 'v1.0.1',
@@ -580,3 +585,35 @@ def are_instruments_identical(name1, name2):
     if name1 == INSTRUMENT_TRANSLATION_DASH2SLASH.get(name2):
         return True
     return False
+
+
+def use_map_blocks_on(argument_to_run_map_blocks_on):
+    """Use map blocks on a given argument.
+
+    This decorator assumes only one of the arguments of the decorated function is chunked.
+    """
+    def decorator(f):
+        argspec = getfullargspec(f)
+        argument_index = argspec.args.index(argument_to_run_map_blocks_on)
+
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            array = args[argument_index]
+            chunks = getattr(array, "chunks", None)
+            if chunks is None:
+                return f(*args, **kwargs)
+            import dask.array as da
+            import xarray as xr
+            if isinstance(array, da.Array):
+                return da.map_blocks(f, *args, **kwargs)
+            elif isinstance(array, xr.DataArray):
+                new_array = array.copy()
+                new_args = list(args)
+                new_args[argument_index] = array.data
+                new_data = da.map_blocks(f, *new_args, **kwargs)
+                new_array.data = new_data
+                return new_array
+            else:
+                raise NotImplementedError(f"Don't know how to map_blocks on {type(array)}")
+        return wrapper
+    return decorator

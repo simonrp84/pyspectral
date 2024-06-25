@@ -1,3 +1,48 @@
+## Version <v0.13.1> (2024/05/07)
+
+### Issues Closed
+
+* [Issue 219](https://github.com/pytroll/pyspectral/issues/219) - [Question] Using red-band for the representation
+* [Issue 193](https://github.com/pytroll/pyspectral/issues/193) - Question: Is there any details about LUT?
+
+In this release 2 issues were closed.
+
+### Pull Requests Merged
+
+#### Features added
+
+* [PR 225](https://github.com/pytroll/pyspectral/pull/225) - Add fengyun and geo-kompsat-2b sensor support
+* [PR 224](https://github.com/pytroll/pyspectral/pull/224) - Add support and RSR converter for the GOCI2 instrument aboard GK-2B
+* [PR 223](https://github.com/pytroll/pyspectral/pull/223) - Add RSR convert script for MERSI-1 on FY-3A/B/C
+* [PR 222](https://github.com/pytroll/pyspectral/pull/222) - Add a RSR convert script for FY-3G MERSI-RM sensor
+* [PR 192](https://github.com/pytroll/pyspectral/pull/192) - Add a RSR convert script for FY-4B GHI sensor
+
+In this release 5 pull requests were closed.
+
+
+## Version <v0.13.0> (2023/11/27)
+
+### Issues Closed
+
+* [Issue 205](https://github.com/pytroll/pyspectral/issues/205) - Near infrared reflectance calculation does not preserve input dtype ([PR 206](https://github.com/pytroll/pyspectral/pull/206) by [@pnuu](https://github.com/pnuu))
+* [Issue 201](https://github.com/pytroll/pyspectral/issues/201) - blackbody functions not dask friendly, trigger early dask computation
+
+In this release 2 issues were closed.
+
+### Pull Requests Merged
+
+#### Features added
+
+* [PR 208](https://github.com/pytroll/pyspectral/pull/208) - Update the solar spectrum code to use the included reference spectra
+* [PR 207](https://github.com/pytroll/pyspectral/pull/207) - Remove pkg_resources usage in config handling
+* [PR 206](https://github.com/pytroll/pyspectral/pull/206) - Return 3.x um reflectance with the same dtype as the NIR data ([205](https://github.com/pytroll/pyspectral/issues/205))
+* [PR 204](https://github.com/pytroll/pyspectral/pull/204) - Bump up python versions
+* [PR 203](https://github.com/pytroll/pyspectral/pull/203) - Allow dataarrays and preserve dtype in rad2temp
+* [PR 202](https://github.com/pytroll/pyspectral/pull/202) - Update the solar spectrum code to use the included reference spectra
+
+In this release 6 pull requests were closed.
+
+
 ## Version <v0.12.5> (2023/09/21)
 
 ### Pull Requests Merged

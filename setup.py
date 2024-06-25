@@ -33,7 +33,7 @@ except IOError:
     long_description = ''
 
 requires = ['docutils>=0.3', 'numpy', 'scipy', 'python-geotiepoints>=1.1.1',
-            'h5py>=2.5', 'requests', 'pyyaml', 'appdirs']
+            'h5py>=2.5', 'requests', 'pyyaml', 'platformdirs']
 
 dask_extra = ['dask[array]']
 test_requires = ['pyyaml', 'dask[array]', 'xlrd', 'pytest', 'xarray', 'responses']
@@ -82,6 +82,6 @@ setup(name=NAME,
                              'pyspectral/data/MSG_SEVIRI_Spectral_Response_Characterisation.XLS'])],
       test_suite='pyspectral.tests.suite',
       tests_require=test_requires,
-      python_requires='>=3.7',
+      python_requires='>=3.10',
       zip_safe=False,
       )

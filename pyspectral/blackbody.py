@@ -28,96 +28,50 @@ try:
 except ImportError:
     da = np
 
+from pyspectral.utils import use_map_blocks_on
+
 LOG = logging.getLogger(__name__)
 
 H_PLANCK = 6.62606957 * 1e-34  # SI-unit = [J*s]
 K_BOLTZMANN = 1.3806488 * 1e-23  # SI-unit = [J/K]
 C_SPEED = 2.99792458 * 1e8  # SI-unit = [m/s]
 
+PLANCK_C1 = H_PLANCK * C_SPEED / K_BOLTZMANN
+PLANCK_C2 = 2 * H_PLANCK * C_SPEED**2
+
 EPSILON = 0.000001
 
 
+@use_map_blocks_on("radiance")
 def blackbody_rad2temp(wavelength, radiance):
-    """Derive brightness temperatures from radiance using the Planck function.
+    """Derive brightness temperatures from radiance using the inverse Planck function.
 
-    Wavelength space. Assumes SI units as input and returns
-    temperature in Kelvin
+    Args:
+        wavelength: The wavelength to use, in SI units (metre).
+        radiance: The radiance to derive temperatures from, in SI units (W/m^2 sr^-1). Scalar or arrays are accepted.
+
+    Returns:
+        The derived temperature in Kelvin.
 
     """
-    mask = False
-    if np.isscalar(radiance):
-        rad = np.array([radiance, ], dtype='float64')
-    else:
-        rad = np.array(radiance, dtype='float64')
-        if np.ma.is_masked(radiance):
-            mask = radiance.mask
-
-    rad = np.ma.masked_array(rad, mask=mask)
-    rad = np.ma.masked_less_equal(rad, 0)
-
-    if np.isscalar(wavelength):
-        wvl = np.array([wavelength, ], dtype='float64')
-    else:
-        wvl = np.array(wavelength, dtype='float64')
-
-    const1 = H_PLANCK * C_SPEED / K_BOLTZMANN
-    const2 = 2 * H_PLANCK * C_SPEED**2
-    res = const1 / (wvl * np.log(np.divide(const2, rad * wvl**5) + 1.0))
-
-    shape = rad.shape
-    resshape = res.shape
-
-    if wvl.shape[0] == 1:
-        if rad.shape[0] == 1:
-            return res[0]
-        else:
-            return res[::].reshape(shape)
-    else:
-        if rad.shape[0] == 1:
-            return res[0, :]
-        else:
-            if len(shape) == 1:
-                return np.reshape(res, (shape[0], resshape[1]))
-            else:
-                return np.reshape(res, (shape[0], shape[1], resshape[1]))
+    with np.errstate(invalid='ignore'):
+        return PLANCK_C1 / (wavelength * np.log(PLANCK_C2 / (radiance * wavelength**5) + 1.0))
 
 
+@use_map_blocks_on("radiance")
 def blackbody_wn_rad2temp(wavenumber, radiance):
-    """Derive brightness temperatures from radiance using the Planck function.
+    """Derive brightness temperatures from radiance using the inverse Planck function.
 
-    Wavenumber space
+    Args:
+        wavenumber: The wavenumber to use, in SI units (1/metre).
+        radiance: The radiance to derive temperatures from, in SI units (W/m^2 sr^-1). Scalar or arrays are accepted.
+
+    Returns:
+        The derived temperature in Kelvin.
 
     """
-    if np.isscalar(radiance):
-        radiance = np.array([radiance], dtype='float64')
-    elif isinstance(radiance, (list, tuple)):
-        radiance = np.array(radiance, dtype='float64')
-    if np.isscalar(wavenumber):
-        wavnum = np.array([wavenumber], dtype='float64')
-    elif isinstance(wavenumber, (list, tuple)):
-        wavnum = np.array(wavenumber, dtype='float64')
-
-    const1 = H_PLANCK * C_SPEED / K_BOLTZMANN
-    const2 = 2 * H_PLANCK * C_SPEED**2
-    res = const1 * wavnum / np.log(
-        np.divide(const2 * wavnum**3, radiance) + 1.0)
-
-    shape = radiance.shape
-    resshape = res.shape
-
-    if wavnum.shape[0] == 1:
-        if radiance.shape[0] == 1:
-            return res[0]
-        else:
-            return res[::].reshape(shape)
-    else:
-        if radiance.shape[0] == 1:
-            return res[0, :]
-        else:
-            if len(shape) == 1:
-                return res.reshape((shape[0], resshape[1]))
-            else:
-                return res.reshape((shape[0], shape[1], resshape[1]))
+    with np.errstate(invalid='ignore'):
+        return PLANCK_C1 * wavenumber / np.log((PLANCK_C2 * wavenumber**3) / radiance + 1.0)
 
 
 def planck(wave, temperature, wavelength=True):
@@ -145,24 +99,12 @@ def planck(wave, temperature, wavelength=True):
         LOG.debug("Using {0} when calculating the Blackbody radiance".format(
             units[(wavelength is True) - 1]))
 
-    if np.isscalar(temperature):
-        temperature = np.array([temperature, ], dtype='float64')
-    elif isinstance(temperature, (list, tuple)):
-        temperature = np.array(temperature, dtype='float64')
-
-    shape = temperature.shape
-    if np.isscalar(wave):
-        wln = np.array([wave, ], dtype='float64')
-    else:
-        wln = np.array(wave, dtype='float64')
-
     if wavelength:
-        const = 2 * H_PLANCK * C_SPEED ** 2
-        nom = const / wln ** 5
-        arg1 = H_PLANCK * C_SPEED / (K_BOLTZMANN * wln)
+        nom = PLANCK_C2 / wave ** 5
+        arg1 = PLANCK_C1 / wave
     else:
-        nom = 2 * H_PLANCK * (C_SPEED ** 2) * (wln ** 3)
-        arg1 = H_PLANCK * C_SPEED * wln / K_BOLTZMANN
+        nom = PLANCK_C2 * wave ** 3
+        arg1 = PLANCK_C1 * wave
 
     with np.errstate(divide='ignore', invalid='ignore'):
         # use dask functions when needed
@@ -178,7 +120,7 @@ def planck(wave, temperature, wavelength=True):
                   str(np.nanmax(arg2)), str(np.nanmin(arg2)))
 
     try:
-        exp_arg = np.multiply(arg1.astype('float64'), arg2.astype('float64'))
+        exp_arg = np.multiply(arg1, arg2)
     except MemoryError:
         LOG.warning(("Dimensions used in numpy.multiply probably reached "
                      "limit!\n"
@@ -197,21 +139,7 @@ def planck(wave, temperature, wavelength=True):
 
     with np.errstate(over='ignore'):
         denom = np.exp(exp_arg) - 1
-        rad = nom / denom
-        radshape = rad.shape
-        if wln.shape[0] == 1:
-            if temperature.shape[0] == 1:
-                return rad[0, 0]
-            else:
-                return rad[:, 0].reshape(shape)
-        else:
-            if temperature.shape[0] == 1:
-                return rad[0, :]
-            else:
-                if len(shape) == 1:
-                    return rad.reshape((shape[0], radshape[1]))
-                else:
-                    return rad.reshape((shape[0], shape[1], radshape[1]))
+        return nom / denom
 
 
 def blackbody_wn(wavenumber, temp):

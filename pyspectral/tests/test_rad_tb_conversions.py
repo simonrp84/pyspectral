@@ -19,24 +19,17 @@
 
 """Testing the radiance to brightness temperature conversion."""
 
-import sys
+import unittest
+import warnings
+from unittest.mock import patch
 
 import numpy as np
+import pytest
 
-from pyspectral.radiance_tb_conversion import RadTbConverter, SeviriRadTbConverter
+from pyspectral.radiance_tb_conversion import RadTbConverter, SeviriRadTbConverter, radiance2tb
 from pyspectral.utils import get_central_wave
 
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
-if sys.version_info < (3,):
-    from mock import patch
-else:
-    from unittest.mock import patch
-
-
-TEST_TBS = np.array([200., 270., 300., 302., 350.], dtype='float32')
+TEST_TBS = np.array([200., 270., 300., 302., 350.])
 
 TRUE_RADS = np.array([856.937353205, 117420.385297,
                       479464.582505, 521412.9511, 2928735.18944],
@@ -45,8 +38,7 @@ TRUE_RADS_SEVIRI = np.array([2.391091e-08,
                              2.559173e-06,
                              9.797091e-06,
                              1.061431e-05,
-                             5.531423e-05],
-                            dtype='float64')
+                             5.531423e-05])
 
 TEST_RSR = {'20': {}}
 TEST_RSR['20']['det-1'] = {}
@@ -231,10 +223,10 @@ class RSRTestDataModis(object):
         self.rsr = TEST_RSR
 
 
-class TestSeviriConversions(unittest.TestCase):
+class TestSeviriConversions:
     """Testing the conversions between radiances and brightness temperatures."""
 
-    def setUp(self):
+    def setup_method(self):
         """Set up."""
         with patch('pyspectral.radiance_tb_conversion.RelativeSpectralResponse') as mymock:
             instance = mymock.return_value
@@ -247,32 +239,38 @@ class TestSeviriConversions(unittest.TestCase):
 
         self.sev2 = SeviriRadTbConverter('Meteosat-9', 'IR3.9')
 
-    def test_rad2tb(self):
+    @pytest.mark.parametrize("dtype", (np.float32, np.float64, float))
+    def test_rad2tb(self, dtype):
         """Unit testing the radiance to brightness temperature conversion."""
-        res = self.sev1.tb2radiance(TEST_TBS, lut=False)
-        self.assertTrue(np.allclose(TRUE_RADS_SEVIRI, res['radiance']))
+        res = self.sev1.tb2radiance(TEST_TBS.astype(dtype), lut=False)
+        assert res['radiance'].dtype == dtype
+        np.testing.assert_allclose(TRUE_RADS_SEVIRI.astype(dtype), res['radiance'], atol=1e-8)
 
-    def test_conversion_simple(self):
+    @pytest.mark.parametrize("dtype", (np.float32, np.float64, float))
+    def test_conversion_simple(self, dtype):
         """Test the conversion based on the non-linear approximation (SEVIRI).
 
         Test the tb2radiance function to convert radiances to Tb's
         using tabulated coefficients based on a non-linear approximation
 
         """
-        retv = self.sev2.tb2radiance(TEST_TBS)
+        retv = self.sev2.tb2radiance(TEST_TBS.astype(dtype))
         rads = retv['radiance']
         # Units space = wavenumber (cm-1):
-        tbs = self.sev2.radiance2tb(rads)
-        self.assertTrue(np.allclose(TEST_TBS, tbs))
+        tbs = self.sev2.radiance2tb(rads.astype(dtype))
+        assert tbs.dtype == dtype
+        np.testing.assert_allclose(TEST_TBS.astype(dtype), tbs, rtol=1e-6)
 
         np.random.seed()
         tbs1 = 200.0 + np.random.random(50) * 150.0
-        retv = self.sev2.tb2radiance(tbs1)
+        retv = self.sev2.tb2radiance(tbs1.astype(dtype))
         rads = retv['radiance']
         tbs = self.sev2.radiance2tb(rads)
-        self.assertTrue(np.allclose(tbs1, tbs))
+        assert tbs.dtype == dtype
+        np.testing.assert_allclose(tbs1, tbs, rtol=1e-6)
 
-    def test_conversions_methods(self):
+    @pytest.mark.parametrize("dtype", (np.float32, np.float64, float))
+    def test_conversions_methods(self, dtype):
         """Test the conversion methods.
 
         Using the two diferent conversion methods to verify that they give
@@ -281,12 +279,14 @@ class TestSeviriConversions(unittest.TestCase):
 
         """
         # Units space = wavenumber (cm-1):
-        retv2 = self.sev2.tb2radiance(TEST_TBS)
-        retv1 = self.sev1.tb2radiance(TEST_TBS)
+        retv2 = self.sev2.tb2radiance(TEST_TBS.astype(dtype))
+        retv1 = self.sev1.tb2radiance(TEST_TBS.astype(dtype))
 
         rads1 = retv1['radiance']
         rads2 = retv2['radiance']
-        self.assertTrue(np.allclose(rads1, rads2))
+        assert rads1.dtype == dtype
+        assert rads2.dtype == dtype
+        np.testing.assert_allclose(rads1, rads2, atol=1e-8)
 
 
 class TestRadTbConversions(unittest.TestCase):
@@ -327,33 +327,106 @@ class TestRadTbConversions(unittest.TestCase):
     def test_rad2tb(self):
         """Unit testing the radiance to brightness temperature conversion."""
         res = self.modis.tb2radiance(TEST_TBS, lut=False)
-        self.assertTrue(np.allclose(TRUE_RADS, res['radiance']))
+        np.testing.assert_allclose(TRUE_RADS, res['radiance'], rtol=1e-5, atol=1e-8)
 
         res = self.modis2.tb2radiance(TEST_TBS, lut=False)
-        self.assertTrue(np.allclose(TRUE_RADS, res['radiance']))
+        np.testing.assert_allclose(TRUE_RADS, res['radiance'], rtol=1e-5, atol=1e-8)
 
         rad = res['radiance']
         tbs = self.modis.radiance2tb(rad)
-        self.assertTrue(np.allclose(TEST_TBS, tbs, atol=0.25))
+        np.testing.assert_allclose(TEST_TBS, tbs, atol=0.25)
 
         res = self.modis.tb2radiance(TEST_TBS, lut=False, normalized=False)
         integral = self.modis.rsr_integral
-        self.assertTrue(np.allclose(TRUE_RADS * integral, res['radiance']))
+        np.testing.assert_allclose(TRUE_RADS * integral, res['radiance'], rtol=1e-5, atol=1e-8)
 
         res = self.modis.tb2radiance(237., lut=False)
-        self.assertAlmostEqual(16570.579551068, res['radiance'])
+        assert res['radiance'] == pytest.approx(16570.579551068)
 
         res = self.modis.tb2radiance(277., lut=False)
-        self.assertAlmostEqual(167544.39368663222, res['radiance'])
+        assert res['radiance'] == pytest.approx(167544.39368663222)
 
         res = self.modis.tb2radiance(1.1, lut=False)
-        self.assertAlmostEqual(0.0, res['radiance'])
+        assert res['radiance'] == pytest.approx(0.0)
 
         res = self.modis.tb2radiance(11.1, lut=False)
-        self.assertAlmostEqual(0.0, res['radiance'])
+        assert res['radiance'] == pytest.approx(0.0)
 
         res = self.modis.tb2radiance(100.1, lut=False)
-        self.assertAlmostEqual(5.3940515573e-06, res['radiance'])
+        assert res['radiance'] == pytest.approx(5.3940515573e-06, abs=1e-7)
 
         res = self.modis.tb2radiance(200.1, lut=False)
-        self.assertAlmostEqual(865.09759706, res['radiance'])
+        assert res['radiance'] == pytest.approx(865.09759706)
+
+
+def test_rad2tb_types():
+    """Test radiance to brightness temperature conversion preserves shape and type."""
+    # 1d rads
+    rad = TRUE_RADS
+    central_wavelength = TEST_RSR['20']['det-1']['central_wavelength'] * 1e-6
+    tbs = radiance2tb(rad, central_wavelength)
+    np.testing.assert_allclose(tbs, TEST_TBS, atol=0.25)
+
+    # 2d rads
+    rad_2d = np.vstack((TRUE_RADS, TRUE_RADS))
+    tbs = radiance2tb(rad_2d, central_wavelength)
+    assert tbs.shape == rad_2d.shape
+
+    tbs = radiance2tb(rad_2d.astype(np.float32), central_wavelength)
+    assert tbs.dtype == np.float32
+
+
+def test_rad2tb_xarray_types():
+    """Test radiance to brightness temperature conversion works with xarray."""
+    xr = pytest.importorskip("xarray")
+
+    central_wavelength = 3.78e-6
+
+    rad_2d = np.vstack((TRUE_RADS, TRUE_RADS))
+    rad = xr.DataArray(rad_2d, dims=["y", "x"])
+    tbs = radiance2tb(rad, central_wavelength)
+    assert isinstance(tbs, xr.DataArray)
+
+    rad = xr.DataArray(rad_2d.astype(np.float32), dims=["y", "x"])
+    tbs = radiance2tb(rad, central_wavelength)
+    assert tbs.dtype == np.float32
+
+
+def test_rad2tb_does_not_warn_about_invalid_log_values():
+    """Test that radiance to temp does not warn about invalid log values."""
+    xr = pytest.importorskip("xarray")
+
+    central_wavelength = 3.78e-6
+
+    rad = xr.DataArray(np.array([-1, 2, 3]).astype(np.float32), dims=["x"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tbs = radiance2tb(rad, central_wavelength)
+        assert np.isnan(tbs[0])
+
+    da = pytest.importorskip("dask.array")
+
+    rad = da.from_array(np.array([-1, 2, 3]), chunks=2).astype(np.float32)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tbs = da.map_blocks(radiance2tb, rad, wavelength=central_wavelength)
+        assert np.isnan(tbs[0])
+
+    rad = xr.DataArray(da.from_array(np.array([-1, 2, 3]), chunks=2).astype(np.float32), dims=["x"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tbs = xr.map_blocks(radiance2tb, rad, kwargs=dict(wavelength=central_wavelength))
+        assert np.isnan(tbs[0])
+
+    rad = da.from_array(np.array([-1, 2, 3]), chunks=2).astype(np.float32)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tbs = radiance2tb(rad, central_wavelength)
+        assert np.isnan(tbs[0])
+
+    rad = xr.DataArray(da.from_array(np.array([-1, 2, 3]), chunks=2).astype(np.float32), dims=["x"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tbs = radiance2tb(rad, central_wavelength)
+        assert np.isnan(tbs[0])
+        assert isinstance(tbs, xr.DataArray)
